@@ -41,13 +41,35 @@ run_cmake()
     -DBUILD_TESTING=${ENABLE_TESTING} \
     -DBUILD_SHARED_LIBS=${SHARED_LIBS} \
     -DFAISS_ENABLE_C_API=${C_API} \
-    -DFAISS_OPT_LEVEL=${CPU_OPTIMIZATION_LEVEL}"
+    -DFAISS_OPT_LEVEL=${CPU_OPTIMIZATION_LEVEL} \
+    -DBLA_VENDOR=Intel10_64_dyn -DMKL_LIBRARIES=/opt/intel/oneapi/mkl/2024.0/lib/libmkl_rt.so.2"
 
   cmake %{cmake_options}
 }
 
 main()
 {
+  mkdir -p "${BUILD_DIR}" && cd "${BUILD_DIR}" || exit
+
+  # Install Intel oneAPI Math Kernel Library (oneMKL) if we hadn't already.
+  # https://www.intel.com/content/www/us/en/developer/tools/oneapi/onemkl-download.html?operatingsystem=linux&distributions=aptpackagemanager
+
+  # Download the key to the system keyring, to set up the repository.
+  wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
+  | gpg --dearmor | sudo tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
+
+  # Add the signed entry to APT sources and configure the APT client to use the
+  # Intel repository.
+  echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" | sudo tee /etc/apt/sources.list.d/oneAPI.list
+
+  # Update the packages list and repository index.
+  sudo apt update
+
+  sudo apt install intel-oneapi-mkl-devel
+
+  # Find the main MKL library file
+  mkl_library=$(find /opt -type f -name "*libmkl_rt.so*")
+
   run_cmake "$1"
 }
 

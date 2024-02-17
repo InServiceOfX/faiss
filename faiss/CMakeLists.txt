@@ -301,10 +301,15 @@ target_link_libraries(faiss_avx512 PRIVATE OpenMP::OpenMP_CXX)
 
 find_package(MKL)
 if(MKL_FOUND)
+  message(STATUS "\nMKL found.\n")
+  message(STATUS "MKL libraries: ${MKL_LIBRARIES}")
+
   target_link_libraries(faiss PRIVATE ${MKL_LIBRARIES})
   target_link_libraries(faiss_avx2 PRIVATE ${MKL_LIBRARIES})
   target_link_libraries(faiss_avx512 PRIVATE ${MKL_LIBRARIES})
 else()
+  message(STATUS "\nMKL not found. Using BLAS and LAPACK instead.\n")
+
   find_package(BLAS REQUIRED)
   target_link_libraries(faiss PRIVATE ${BLAS_LIBRARIES})
   target_link_libraries(faiss_avx2 PRIVATE ${BLAS_LIBRARIES})
