@@ -94,3 +94,7 @@ if(BUILD_TESTING)
     add_subdirectory(faiss/gpu/test)
   endif()
 endif()
+
+# Do other build setups. This includes
+# - set cache.
+include(SetCache.cmake)

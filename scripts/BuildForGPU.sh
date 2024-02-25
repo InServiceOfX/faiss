@@ -33,6 +33,10 @@ C_API="ON"
 # values generic, avx2, avx512, increasing order of optimization
 CPU_OPTIMIZATION_LEVEL="avx2"
 
+# Default value is 75;72. `-DCMAKE_CUDA_ARCHITECTURES="75;72"` for specifying
+# which GPU architectures to build against.
+CUDA_ARCHITECTURES="75;72"
+
 run_cmake()
 {
   local cmake_options="-DFAISS_ENABLE_GPU=${ENABLE_GPU} \
@@ -42,7 +46,8 @@ run_cmake()
     -DBUILD_SHARED_LIBS=${SHARED_LIBS} \
     -DFAISS_ENABLE_C_API=${C_API} \
     -DFAISS_OPT_LEVEL=${CPU_OPTIMIZATION_LEVEL} \
-    -DBLA_VENDOR=Intel10_64_dyn -DMKL_LIBRARIES=/opt/intel/oneapi/mkl/2024.0/lib/libmkl_rt.so.2"
+    -DBLA_VENDOR=Intel10_64_dyn -DMKL_LIBRARIES=/opt/intel/oneapi/mkl/2024.0/lib/libmkl_rt.so.2 \
+    -DCMAKE_CUDA_ARCHITECTURES=${CUDA_ARCHITECTURES}"
 
   cmake %{cmake_options}
 }
@@ -69,6 +74,10 @@ main()
 
   # Find the main MKL library file
   mkl_library=$(find /opt -type f -name "*libmkl_rt.so*")
+
+  # Get CUDA Architecture.
+  source GetComputeCapability.sh
+  CUDA_ARCHITECTURES=$(get_compute_capability_as_cuda_architecture)
 
   run_cmake "$1"
 }
