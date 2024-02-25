@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Usage:
+# For no RAFT (NVIDIA's library), do
+# bash BuildForGPU.sh --disable-raft
+# Otherwise, do bash BuildForGPU.sh if you know RAFT had been installed.
+
 # CMake options as variables, see
 # https://github.com/ernestyalumni/faiss/blob/main/INSTALL.md
 
@@ -37,7 +42,19 @@ CPU_OPTIMIZATION_LEVEL="avx2"
 # which GPU architectures to build against.
 CUDA_ARCHITECTURES="75;72"
 
-run_cmake()
+function print_help
+{
+  echo "Usage: $0 [-h|--help] [-b <build_directory>]"
+  echo ""
+  echo "Options:"
+  echo "-h, --help               Print this help message."
+  echo "-b, --build-dir <path>   Specify the path for the build directory. If not provided,"
+  echo "                          'BuildGPU' will be used as the default value."
+  echo "-r, --disable-raft       Disable RAFT implementation"
+  exit 1
+}
+
+create_cmake_options()
 {
   local cmake_options="-DFAISS_ENABLE_GPU=${ENABLE_GPU} \
     -DFAISS_ENABLE_PYTHON=${ENABLE_PYTHON} \
@@ -46,40 +63,103 @@ run_cmake()
     -DBUILD_SHARED_LIBS=${SHARED_LIBS} \
     -DFAISS_ENABLE_C_API=${C_API} \
     -DFAISS_OPT_LEVEL=${CPU_OPTIMIZATION_LEVEL} \
-    -DBLA_VENDOR=Intel10_64_dyn -DMKL_LIBRARIES=/opt/intel/oneapi/mkl/2024.0/lib/libmkl_rt.so.2 \
+    -DBLA_VENDOR=Intel10_64_dyn -DMKL_LIBRARIES=/opt/intel/oneapi/mkl/latest/lib/libmkl_rt.so.2 \
     -DCMAKE_CUDA_ARCHITECTURES=${CUDA_ARCHITECTURES}"
 
-  cmake %{cmake_options}
+  echo $cmake_options
+}
+
+run_cmake()
+{
+  local cmake_options=$1
+  echo "Build directory: $BUILD_DIR"
+  echo "Parent directory: $parent_directory"
+  cmake $cmake_options -B "$BUILD_DIR" "$parent_directory" 
+}
+
+run_make()
+{
+  make -C $BUILD_DIR
+  make -C $BUILD_DIR -j faiss
+  make -C $BUILD_DIR -j swigfaiss
+  (cd $BUILD_DIR/faiss/python && python3 setup.py install)
 }
 
 main()
 {
-  mkdir -p "${BUILD_DIR}" && cd "${BUILD_DIR}" || exit
+  # Parse command-line arguments
+  while [[ $# -gt 0 ]]; do
+      case "$1" in
+          --build-dir)
+              BUILD_DIR="$2"
+              shift # past argument
+              shift # past value
+              ;;
+          --disable-raft)
+            ENABLE_RAFT="OFF"
+            shift # past argument
+            ;;
+          --help)
+              print_help
+              exit 0
+              ;;
+          *)
+              # Unknown option
+              print_help
+              exit 1
+              ;;
+      esac
+  done
 
   # Install Intel oneAPI Math Kernel Library (oneMKL) if we hadn't already.
   # https://www.intel.com/content/www/us/en/developer/tools/oneapi/onemkl-download.html?operatingsystem=linux&distributions=aptpackagemanager
 
-  # Download the key to the system keyring, to set up the repository.
-  wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
-  | gpg --dearmor | sudo tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
+  if ! dpkg -l | grep -qw intel-oneapi-mkl-devel; then
 
-  # Add the signed entry to APT sources and configure the APT client to use the
-  # Intel repository.
-  echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" | sudo tee /etc/apt/sources.list.d/oneAPI.list
+    # Download the key to the system keyring, to set up the repository.
+    wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
+    | gpg --dearmor | sudo tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
 
-  # Update the packages list and repository index.
-  sudo apt update
+    # Add the signed entry to APT sources and configure the APT client to use the
+    # Intel repository.
+    echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" | sudo tee /etc/apt/sources.list.d/oneAPI.list
 
-  sudo apt install intel-oneapi-mkl-devel
+    # Update the packages list and repository index.
+    sudo apt update
 
-  # Find the main MKL library file
-  mkl_library=$(find /opt -type f -name "*libmkl_rt.so*")
+    sudo apt install intel-oneapi-mkl-devel
+    # Find the main MKL library file
+    mkl_library=$(find /opt -type f -name "*libmkl_rt.so*")
+  else
+    echo "intel-oneapi-mkl-devel package already installed."
+  fi
+
+  script_directory=$(dirname "$0")
+  parent_directory=$(dirname "$script_directory")
+  echo "parent directory: $parent_directory"
+  echo "$script_directory"
+  cd "$script_directory"
+  echo "current Dir"
+  pwd
 
   # Get CUDA Architecture.
   source GetComputeCapability.sh
   CUDA_ARCHITECTURES=$(get_compute_capability_as_cuda_architecture)
 
-  run_cmake "$1"
+  cd - || exit
+
+  if [ -z "${BUILD_DIR:-}" ]; then
+    BUILD_DIR="$parent_directory/BuildGPU"
+  fi
+
+  mkdir -p "${BUILD_DIR}" || exit
+
+  # Capture the cmake options
+  local cmake_options=$(create_cmake_options)
+
+  run_cmake "$cmake_options"
+
+  run_make
 }
 
 main "$@"
