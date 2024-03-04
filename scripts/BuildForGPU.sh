@@ -85,6 +85,18 @@ run_make()
   (cd $BUILD_DIR/faiss/python && python3 setup.py install)
 }
 
+run_with_sudo_optionally()
+{
+  local command=$1
+
+  # Check if current user is root (user ID=0) or if sudo is not available
+  if [ "$(id -u)" -eq 0 ] || ! command -v sudo &> /dev/null; then
+    $command
+  else
+    sudo $command
+  fi
+}
+
 main()
 {
   # Parse command-line arguments
@@ -118,16 +130,19 @@ main()
 
     # Download the key to the system keyring, to set up the repository.
     wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
-    | gpg --dearmor | sudo tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
+    | gpg --dearmor \
+    | run_with_sudo_optionally "tee /usr/share/keyrings/oneapi-archive-keyring.gpg" \
+    > /dev/null
 
     # Add the signed entry to APT sources and configure the APT client to use the
     # Intel repository.
-    echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" | sudo tee /etc/apt/sources.list.d/oneAPI.list
+    echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
+    | run_with_sudo_optionally "tee /etc/apt/sources.list.d/oneAPI.list"
 
     # Update the packages list and repository index.
-    sudo apt update
+    run_with_sudo_optionally "apt update"
 
-    sudo apt install intel-oneapi-mkl-devel
+    run_with_sudo_optionally "apt install -y intel-oneapi-mkl-devel"
     # Find the main MKL library file
     mkl_library=$(find /opt -type f -name "*libmkl_rt.so*")
   else
