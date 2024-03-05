@@ -99,6 +99,8 @@ run_with_sudo_optionally()
 
 main()
 {
+  local compute_capability_provided=false
+
   # Parse command-line arguments
   while [[ $# -gt 0 ]]; do
       case "$1" in
@@ -110,6 +112,12 @@ main()
           --disable-raft)
             ENABLE_RAFT="OFF"
             shift # past argument
+            ;;
+          --compute-capability)
+            CUDA_ARCHITECTURES="$2"
+            compute_capability_provided=true
+            shift # past argument
+            shift # past value
             ;;
           --help)
               print_help
@@ -152,16 +160,16 @@ main()
   script_directory=$(dirname "$0")
   parent_directory=$(dirname "$script_directory")
   echo "parent directory: $parent_directory"
-  echo "$script_directory"
-  cd "$script_directory"
+  echo "scripts directory: $script_directory"
+
+  if ! $compute_capability_provided; then
+    echo "Using GetComputeCapability.sh to get compute capability."
+    source $script_directory/GetComputeCapability.sh
+    CUDA_ARCHITECTURES=$(get_compute_capability_as_cuda_architecture)
+  fi
+
   echo "current Dir"
   pwd
-
-  # Get CUDA Architecture.
-  source GetComputeCapability.sh
-  CUDA_ARCHITECTURES=$(get_compute_capability_as_cuda_architecture)
-
-  cd - || exit
 
   if [ -z "${BUILD_DIR:-}" ]; then
     BUILD_DIR="$parent_directory/BuildGPU"

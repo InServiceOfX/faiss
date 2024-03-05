@@ -42,5 +42,5 @@ python3 -m venv ./venv/
 
 # Activate the virtual environment.
 
-source ./venvCPU/bin/activate
+source ./venv/bin/activate
 ```
