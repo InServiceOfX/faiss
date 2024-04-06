@@ -79,7 +79,7 @@ run_cmake()
 
 run_make()
 {
-  make -C $BUILD_DIR
+  make -C $BUILD_DIR -j
   make -C $BUILD_DIR -j faiss
   make -C $BUILD_DIR -j swigfaiss
   (cd $BUILD_DIR/faiss/python && python3 setup.py install)
